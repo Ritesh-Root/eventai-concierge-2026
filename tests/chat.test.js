@@ -142,6 +142,18 @@ describe('POST /api/vision', () => {
     const res = await request(app).post('/api/vision').send({ image: bad }).expect(400);
     expect(res.body.error).toMatch(/format|Unsupported/i);
   });
+
+  it('returns a reply for a valid image without prompt', async () => {
+    const res = await request(app).post('/api/vision').send({ image: validImage }).expect(200);
+    expect(res.body).toHaveProperty('reply');
+  });
+
+  it('returns 413 when image exceeds size limit', async () => {
+    // 6MB of base64
+    const largeImage = 'data:image/png;base64,' + 'A'.repeat(6 * 1024 * 1024);
+    const res = await request(app).post('/api/vision').send({ image: largeImage }).expect(413);
+    expect(res.body.error).toMatch(/large/i);
+  });
 });
 
 describe('GET /api/event', () => {

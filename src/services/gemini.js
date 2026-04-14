@@ -68,6 +68,10 @@ async function askGemini(userMessage, eventContext = eventData) {
   const model = genAI.getGenerativeModel({
     model: TEXT_MODEL,
     systemInstruction: buildSystemPrompt(JSON.stringify(eventContext, null, 2)),
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 1024,
+    },
   });
 
   let lastErr;
@@ -104,6 +108,10 @@ async function* streamGemini(userMessage, eventContext = eventData) {
   const model = genAI.getGenerativeModel({
     model: TEXT_MODEL,
     systemInstruction: buildSystemPrompt(JSON.stringify(eventContext, null, 2)),
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 1024,
+    },
   });
 
   try {
@@ -137,6 +145,10 @@ async function askGeminiVision(image, userText = '', eventContext = eventData) {
   const model = genAI.getGenerativeModel({
     model: VISION_MODEL,
     systemInstruction: buildVisionPrompt(JSON.stringify(eventContext, null, 2)),
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 1024,
+    },
   });
 
   const parts = [

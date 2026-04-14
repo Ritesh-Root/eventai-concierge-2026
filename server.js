@@ -8,6 +8,9 @@ require('dotenv').config();
 
 const express = require('express');
 const path = require('path');
+const compression = require('compression');
+const xss = require('xss-clean');
+const mongoSanitize = require('express-mongo-sanitize');
 const { configureHelmet, configureCors } = require('./src/middleware/security');
 const chatRouter = require('./src/routes/chat');
 
@@ -21,6 +24,9 @@ app.use(configureCors());
 // ── Body parsing ──────────────────────────────────────────────────────
 // 7 MB ceiling covers a base64-encoded 5 MB image plus JSON overhead.
 app.use(express.json({ limit: '7mb' }));
+app.use(compression());
+app.use(xss());
+app.use(mongoSanitize());
 
 // ── Static files ──────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public'), {
