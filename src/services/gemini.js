@@ -1,25 +1,24 @@
 /**
  * @fileoverview Gemini AI service — wraps the @google/generative-ai SDK.
- * Sends user queries with event context to Google Gemini 2.5 Flash and
- * returns the model's text reply. Includes retry-with-backoff for transient
- * errors (429 / 5xx) which are common on the free tier under burst load.
+ * Provides three capabilities:
+ *   1. askGemini         — single-shot text chat, grounded in event data.
+ *   2. streamGemini      — async-iterable stream of text chunks (SSE-friendly).
+ *   3. askGeminiVision   — multi-modal (image + text) grounded reply.
+ * Includes retry-with-backoff for transient errors (429 / 5xx).
  * @module services/gemini
  */
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { buildSystemPrompt } = require('../utils/prompts');
+const { buildSystemPrompt, buildVisionPrompt } = require('../utils/prompts');
 const eventData = require('../utils/eventData');
 
-const MODEL_NAME = 'gemini-2.5-flash';
+const TEXT_MODEL = 'gemini-2.5-flash-lite';
+const VISION_MODEL = 'gemini-2.5-flash';
 const MAX_RETRIES = 2;
 const BASE_BACKOFF_MS = 300;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/**
- * Determines whether an error from the Gemini SDK is worth retrying.
- * Transient = 429 (rate limit) or any 5xx (upstream hiccup).
- */
 function isTransient(err) {
   const status = err?.status;
   const msg = (err?.message || '').toLowerCase();
@@ -29,36 +28,45 @@ function isTransient(err) {
   return /rate.?limit|quota|resource_?exhausted|unavailable|overloaded|503|500|429/.test(msg);
 }
 
-/**
- * Determines whether an error indicates an invalid API key.
- */
 function isAuthError(err) {
   const status = err?.status;
   const msg = (err?.message || '').toLowerCase();
   return status === 401 || status === 403 || /api_?key_?invalid|permission_?denied|unauthenti/.test(msg);
 }
 
-/**
- * Sends a user message to Gemini with full event context and returns
- * the model's text reply. Retries up to MAX_RETRIES on transient errors.
- *
- * @param {string} userMessage - The attendee's question or request.
- * @param {object} [eventContext=eventData] - Event data object to ground the response.
- * @returns {Promise<string>} The model's text response.
- * @throws {Error} If the API key is missing, invalid, or the call ultimately fails.
- *   Thrown errors carry a `code` property: 'NO_KEY' | 'AUTH' | 'RATE_LIMIT' | 'UPSTREAM'.
- */
-async function askGemini(userMessage, eventContext = eventData) {
+function getClient() {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     const e = new Error('GEMINI_API_KEY is not set. Please configure it in your .env file.');
     e.code = 'NO_KEY';
     throw e;
   }
+  return new GoogleGenerativeAI(apiKey);
+}
 
-  const genAI = new GoogleGenerativeAI(apiKey);
+function rethrow(err, lastErr = err) {
+  if (isAuthError(err)) {
+    const e = new Error('Invalid Gemini API key. Please check your configuration.');
+    e.code = 'AUTH';
+    throw e;
+  }
+  if (isTransient(lastErr)) {
+    const e = new Error('AI rate limit reached — please try again in a few seconds.');
+    e.code = 'RATE_LIMIT';
+    throw e;
+  }
+  const e = new Error('Failed to get a response from the AI service.');
+  e.code = 'UPSTREAM';
+  throw e;
+}
+
+/**
+ * Single-shot text chat — returns the model's full reply.
+ */
+async function askGemini(userMessage, eventContext = eventData) {
+  const genAI = getClient();
   const model = genAI.getGenerativeModel({
-    model: MODEL_NAME,
+    model: TEXT_MODEL,
     systemInstruction: buildSystemPrompt(JSON.stringify(eventContext, null, 2)),
   });
 
@@ -73,38 +81,100 @@ async function askGemini(userMessage, eventContext = eventData) {
       return text.trim();
     } catch (err) {
       lastErr = err;
-      console.error(
-        `[GeminiService] attempt ${attempt + 1}/${MAX_RETRIES + 1} failed:`,
-        err.message
-      );
-
-      if (isAuthError(err)) {
-        const e = new Error('Invalid Gemini API key. Please check your configuration.');
-        e.code = 'AUTH';
-        throw e;
-      }
-
-      if (!isTransient(err) || attempt === MAX_RETRIES) {
-        break;
-      }
-
-      // Exponential backoff with small jitter
-      const delay = BASE_BACKOFF_MS * 2 ** attempt + Math.floor(Math.random() * 100);
-      await sleep(delay);
+      console.error(`[GeminiService] askGemini attempt ${attempt + 1} failed:`, err.message);
+      if (isAuthError(err)) rethrow(err);
+      if (!isTransient(err) || attempt === MAX_RETRIES) break;
+      await sleep(BASE_BACKOFF_MS * 2 ** attempt + Math.floor(Math.random() * 100));
     }
   }
+  rethrow(lastErr);
+  return ''; // unreachable
+}
 
-  if (isTransient(lastErr)) {
-    const e = new Error(
-      'AI rate limit reached — please try again in a few seconds.'
-    );
-    e.code = 'RATE_LIMIT';
+/**
+ * Streaming text chat — yields string chunks as Gemini produces them.
+ * Consumers can write each chunk to an SSE stream.
+ *
+ * @param {string} userMessage
+ * @param {object} [eventContext=eventData]
+ * @returns {AsyncGenerator<string>}
+ */
+async function* streamGemini(userMessage, eventContext = eventData) {
+  const genAI = getClient();
+  const model = genAI.getGenerativeModel({
+    model: TEXT_MODEL,
+    systemInstruction: buildSystemPrompt(JSON.stringify(eventContext, null, 2)),
+  });
+
+  try {
+    const result = await model.generateContentStream(userMessage);
+    for await (const chunk of result.stream) {
+      const text = chunk?.text?.();
+      if (text) yield text;
+    }
+  } catch (err) {
+    console.error('[GeminiService] streamGemini failed:', err.message);
+    rethrow(err);
+  }
+}
+
+/**
+ * Multi-modal chat — accepts an image (base64) + optional text prompt.
+ *
+ * @param {{ data: string, mimeType: string }} image
+ * @param {string} [userText]
+ * @param {object} [eventContext=eventData]
+ * @returns {Promise<string>}
+ */
+async function askGeminiVision(image, userText = '', eventContext = eventData) {
+  if (!image?.data || !image?.mimeType) {
+    const e = new Error('Image data and mimeType are required for vision.');
+    e.code = 'BAD_IMAGE';
     throw e;
   }
 
-  const e = new Error('Failed to get a response from the AI service.');
-  e.code = 'UPSTREAM';
-  throw e;
+  const genAI = getClient();
+  const model = genAI.getGenerativeModel({
+    model: VISION_MODEL,
+    systemInstruction: buildVisionPrompt(JSON.stringify(eventContext, null, 2)),
+  });
+
+  const parts = [
+    { inlineData: { data: image.data, mimeType: image.mimeType } },
+  ];
+  if (userText && userText.trim()) {
+    parts.push({ text: userText.trim() });
+  } else {
+    parts.push({ text: 'What is in this image, and how does it relate to the event?' });
+  }
+
+  let lastErr;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    try {
+      const result = await model.generateContent({
+        contents: [{ role: 'user', parts }],
+      });
+      const text = result.response.text();
+      if (!text || text.trim().length === 0) {
+        return "I couldn't read the image clearly. Could you try another angle?";
+      }
+      return text.trim();
+    } catch (err) {
+      lastErr = err;
+      console.error(`[GeminiService] askGeminiVision attempt ${attempt + 1} failed:`, err.message);
+      if (isAuthError(err)) rethrow(err);
+      if (!isTransient(err) || attempt === MAX_RETRIES) break;
+      await sleep(BASE_BACKOFF_MS * 2 ** attempt + Math.floor(Math.random() * 100));
+    }
+  }
+  rethrow(lastErr);
+  return '';
 }
 
-module.exports = { askGemini, MODEL_NAME };
+module.exports = {
+  askGemini,
+  streamGemini,
+  askGeminiVision,
+  MODEL_NAME: TEXT_MODEL,
+  VISION_MODEL,
+};

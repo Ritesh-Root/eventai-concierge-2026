@@ -19,13 +19,20 @@ app.use(configureHelmet());
 app.use(configureCors());
 
 // ── Body parsing ──────────────────────────────────────────────────────
-app.use(express.json({ limit: '16kb' }));
+// 7 MB ceiling covers a base64-encoded 5 MB image plus JSON overhead.
+app.use(express.json({ limit: '7mb' }));
 
 // ── Static files ──────────────────────────────────────────────────────
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('sw.js') || filePath.endsWith('manifest.webmanifest')) {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  },
+}));
 
 // ── API routes ────────────────────────────────────────────────────────
-app.use('/api/chat', chatRouter);
+app.use('/api', chatRouter);
 
 // ── Health check ──────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {

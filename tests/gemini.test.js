@@ -53,7 +53,7 @@ describe('Gemini Service', () => {
         model: MODEL_NAME,
       })
     );
-    expect(MODEL_NAME).toBe('gemini-2.5-flash');
+    expect(MODEL_NAME).toBe('gemini-2.5-flash-lite');
   });
 
   it('should include system instruction with event data', async () => {

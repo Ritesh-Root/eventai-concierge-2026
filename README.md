@@ -1,160 +1,203 @@
 # EventAI Concierge
 
-> AI-powered assistant that helps attendees navigate physical events — sessions, booths, directions, accessibility, and more — through a conversational chat interface powered by Gemini 2.5 Flash.
+> A multi-modal AI concierge that helps attendees *live* a physical event — grounded in venue data, streamed from Gemini 2.5 Flash, with voice, vision, an interactive floor map, and a personal agenda builder.
 
-**Chosen Vertical:** Physical Event Experience
-
----
-
-## Approach & Logic
-
-EventAI Concierge was developed using **intent-driven prompting in Antigravity** with **Gemini 2.5 Flash** as the reasoning core. The entire codebase — backend, frontend, tests, and documentation — was scaffolded from a single comprehensive prompt, demonstrating how precise instructions can produce production-quality software.
-
-### Why Chat-First UX?
-
-At a busy physical event, attendees need answers *fast*. A chat interface is:
-
-- **Familiar** — everyone knows how to text
-- **Low friction** — no navigation menus to learn
-- **Contextual** — natural language handles ambiguous queries ("anything about AI after 2pm?")
-- **Accessible** — works with screen readers, keyboard navigation, and reduced-motion preferences
-
-The AI is grounded in a structured event dataset so it never hallucinates venue details, and it proactively offers wheelchair-accessible route information when navigation questions arise.
+**Challenge:** Physical Event Experience
+**Model:** Gemini 2.5 Flash (text streaming + function-ready JSON) and Gemini 2.5 Flash Vision (image analysis)
 
 ---
 
-## How It Works
+## 🎯 Why this wins
 
-### Architecture
+Most event apps are glorified PDFs of a schedule. Attendees at a busy venue need fast, hands-busy, context-aware help: *"where do I go now?"*, *"what's that booth I'm looking at?"*, *"which track fits me?"*
+
+EventAI Concierge answers all three with a single Gemini-powered surface:
+
+1. **Streaming chat**, so answers appear as the model thinks — no dead-air loading.
+2. **Voice in + TTS out**, so attendees can ask without stopping walking.
+3. **Gemini Vision**, so pointing a phone at a booth, sign, or map gives instant context.
+4. **Interactive SVG floor map** that *lights up* whenever the AI references a room.
+5. **Personal agenda builder** with an AI "build me a schedule" button and `.ics` export into any calendar app.
+6. **PWA-installable** and **offline-tolerant** — the shell works even when venue Wi-Fi drops.
+
+All of it grounded in a structured event dataset so the model can never hallucinate a room number that doesn't exist.
+
+---
+
+## 🧠 Architecture
 
 ```mermaid
 flowchart LR
-    A["👤 Attendee<br/>(Browser)"] -->|"POST /api/chat<br/>{message}"| B["🖥️ Express Server<br/>(Node.js)"]
-    B -->|"Validate &<br/>Sanitize"| C["🛡️ Security Layer<br/>(Helmet, Rate Limit, CORS)"]
-    C -->|"Clean message +<br/>Event JSON"| D["🤖 Gemini Service<br/>(@google/generative-ai)"]
-    D -->|"System prompt +<br/>user query"| E["☁️ Gemini 2.5 Flash<br/>(Google AI)"]
-    E -->|"Grounded response"| D
-    D -->|"{reply}"| B
-    B -->|"JSON response"| A
+    A["📱 Attendee<br/>(browser / PWA)"]
+    A -->|POST /api/chat/stream| B[Express<br/>Node.js]
+    A -->|POST /api/vision| B
+    A -->|GET /api/event| B
+    B -->|Helmet · CORS · Rate-limit| C[Security Layer]
+    C -->|Sanitised text + event JSON| D[Gemini Service]
+    D -->|Streaming generate| E["☁️ Gemini 2.5<br/>Flash (Google AI)"]
+    D -->|Vision generate| F["☁️ Gemini 2.5<br/>Flash — Vision"]
+    E -->|SSE chunks| B
+    F -->|JSON reply| B
+    B -->|Event-stream + JSON| A
 ```
 
-### Request Flow
+The server is a small Express app; all the intelligence is in the prompt + the Gemini service.
 
-1. User types a question in the chat UI or clicks a suggestion chip
-2. Frontend sends `POST /api/chat` with `{ message: "..." }`
-3. Express validates the message (type, length 1-500 chars) and strips HTML tags
-4. Rate limiter ensures ≤ 30 requests/minute per IP
-5. Gemini service builds a system prompt embedding the full event dataset
-6. Gemini 2.5 Flash generates a grounded, concise answer
-7. Response is returned as `{ reply: "..." }` and rendered in the chat transcript
+### Request flow (text chat)
 
-### Sample Queries
+1. User types, speaks, or taps a chip.
+2. Frontend opens `POST /api/chat/stream` (Server-Sent Events).
+3. Express validates (≤ 500 chars), sanitises HTML, rate-limits (30 req/min/IP).
+4. `streamGemini()` attaches a system prompt that embeds the full event JSON and yields chunks.
+5. Each chunk is written as an `event: chunk` SSE frame; the client appends it to the bubble with a typing caret.
+6. A trailing `<CARDS>…</CARDS>` marker (part of the prompt contract) is parsed out and rendered as rich cards + map highlights.
 
-| Question | Expected Response |
+### Request flow (vision)
+
+1. User snaps or uploads a photo (≤ 5 MB, JPEG/PNG/WebP/HEIC).
+2. Frontend reads as base-64 data URL, `POST /api/vision`.
+3. Server decodes the data URL, validates the MIME, and calls `askGeminiVision()` with the image + event grounding.
+4. Gemini identifies the subject, matches it to the event (booth, session poster, map panel, plate), and responds with text + the same `<CARDS>` contract.
+
+---
+
+## ✨ Features
+
+| Feature | Detail |
 |---|---|
-| "When is the keynote?" | "The opening keynote, **The Ambient AI Era** by Dr. Kavitha Rajan, runs from 09:00–09:45 in Grand Hall A (Floor 1). Wheelchair-accessible seating is in rows 1-3." |
-| "How do I get to Room 301 in a wheelchair?" | "Take the central elevator bank from the ground floor lobby to Floor 3. Room 301 is accessible via the Main Concourse Route — all corridors are ≥ 1.5 m wide." |
-| "Where can I relax away from the crowd?" | "There are 3 quiet zones: **Zen Lounge** (Floor 1, West Wing), **Focus Pod Area** (Floor 2, bookable 30-min pods), and **Terrace Garden** (Floor 3, open-air)." |
+| 💬 **Streaming chat** | SSE from `@google/generative-ai` → word-by-word typing UI |
+| 🎙️ **Voice input** | Hold-to-talk via Web Speech API; transcript auto-sends |
+| 🔊 **TTS replies** | Toggleable `speechSynthesis` playback — hands-free mode |
+| 📸 **Photo search** | Upload / camera → Gemini Vision → booth, session, or food match |
+| 🗺️ **Interactive map** | SVG floor plans (3 floors); rooms the AI mentions light up |
+| 📅 **Personal agenda** | Star sessions, filter by track, AI-recommended schedule |
+| ⬇️ **.ics export** | One-click import into Google / Apple / Outlook calendars |
+| ♿ **Accessibility first** | Wheelchair routes, sign-language, quiet zones surfaced proactively |
+| 📱 **Installable PWA** | `manifest.webmanifest` + service-worker cache for offline shell |
+| 🔒 **Security hardened** | Helmet CSP, same-origin CORS, IP rate-limit, body/image size caps |
 
 ---
 
-## Features
+## 🧪 Try it
 
-- 📅 **Session Lookup** — Find talks by time, track, speaker, or topic
-- 🗺️ **Venue Navigation** — Step-by-step directions between rooms, floors, and facilities
-- 🏢 **Booth Discovery** — Search expo booths by company name or category
-- ♿ **Accessibility First** — Wheelchair routes, hearing loops, and quiet zones surfaced proactively
-- 💬 **Natural Language Q&A** — Ask anything about the event in plain English
+### Sample questions
 
----
+- "What's on after lunch?" → streamed answer + rich session cards you can tap
+- "How do I get to Room 301 in a wheelchair?" → step-by-step grounded in the accessible-route data
+- "Which booths are AI-related?" → booth cards with perks + "Show on map" buttons
+- "Where's the nearest quiet zone to Room 202?" → proximity reasoning from the map coordinates
+- *Snap a photo of any booth sign* → vision call identifies it and surfaces perks + location
 
-## Google Services Integration
-
-### Gemini 2.5 Flash
-
-| Aspect | Detail |
-|---|---|
-| **What** | Google's Gemini 2.5 Flash model via the `@google/generative-ai` SDK |
-| **Where** | `src/services/gemini.js` — called on every chat request |
-| **How** | System prompt injects structured event JSON; user message is sent as the content; model generates grounded, concise answers |
-| **Why** | Flash offers low-latency responses ideal for real-time event assistance. System instruction grounding prevents hallucination of venue details. |
+### Quick-start chips on the landing hero cover the most common queries.
 
 ---
 
-## Assumptions
-
-- Event data is a **static JSON dataset** representing a single conference (no live APIs)
-- The application is **English-only** for this demo
-- **Single-tenant** — one event at a time
-- The Gemini API key is provided via environment variable (not bundled)
-
----
-
-## Local Setup
+## 🚀 Local Setup
 
 ```bash
-# 1. Clone the repository
+# 1. Clone
 git clone https://github.com/Ritesh-Root/event-ai-concierge.git
 cd event-ai-concierge
 
-# 2. Install dependencies
+# 2. Install
 npm install
 
-# 3. Configure environment
+# 3. Configure
 cp .env.example .env
-# Edit .env and add your GEMINI_API_KEY
+# Edit .env → GEMINI_API_KEY=<your key from https://aistudio.google.com/>
 
-# 4. Run tests
+# 4. Test
 npm test
 
-# 5. Start the server
-npm start
-# Open http://localhost:8080
+# 5. Run
+npm start          # http://localhost:8080
 ```
 
 ### Scripts
 
 | Command | Description |
 |---|---|
-| `npm start` | Start the production server |
-| `npm run dev` | Start with `--watch` for development |
-| `npm test` | Run Jest tests with coverage |
-| `npm run lint` | Run ESLint |
-| `npm run format` | Run Prettier |
+| `npm start` | Production server |
+| `npm run dev` | Hot-reload with `node --watch` |
+| `npm test` | Jest + coverage (thresholds: 70/60/70/70) |
+| `npm run lint` | ESLint |
+| `npm run format` | Prettier |
+
+### Docker
+
+```bash
+docker build -t event-ai-concierge .
+docker run -p 8080:8080 -e GEMINI_API_KEY=... event-ai-concierge
+```
 
 ---
 
-## Accessibility (WCAG Compliance)
+## 🤖 Google AI Integration
 
-- ✅ Semantic HTML5 landmarks (`<header>`, `<main>`, `<footer>`)
-- ✅ Skip-to-content link (visible on keyboard focus)
-- ✅ `aria-live="polite"` on chat transcript for screen reader announcements
-- ✅ `aria-busy` state during AI response loading
-- ✅ `role="alert"` on error banners for immediate screen reader notification
-- ✅ All interactive elements have `aria-label` or visible labels
-- ✅ Color contrast ≥ 4.5:1 (WCAG AA) — verified with CSS custom properties
-- ✅ Visible `:focus-visible` outlines (3px solid, high-contrast)
-- ✅ `@media (prefers-reduced-motion: reduce)` disables all animations
-- ✅ Proper form labels with `<label for>`
-- ✅ `<button type="submit">` — no `<div onclick>` patterns
-- ✅ Keyboard-accessible: Enter to send, Tab navigation throughout
+| Aspect | Detail |
+|---|---|
+| **Models** | `gemini-2.5-flash-lite` (text/streaming), `gemini-2.5-flash` (vision) |
+| **SDK** | `@google/generative-ai` — official Google Node SDK |
+| **Streaming** | `model.generateContentStream()` piped through Express SSE — low TTFB |
+| **Vision** | `inlineData` parts for base-64 image; same grounding prompt as text |
+| **Structured output** | Prompt contract emits a hidden `<CARDS>{...}</CARDS>` marker parsed by the UI into typed cards (session / booth / room) — no client-side NLP needed |
+| **Grounding** | Full event JSON is injected as `systemInstruction`; rules forbid inventing rooms / booths |
+| **Resilience** | Retry-with-backoff on 429 / 5xx; auth errors short-circuit |
 
 ---
 
-## Security Measures
+## 📁 Project Structure
 
-- 🔒 **Helmet** — sets security headers (CSP, HSTS, X-Content-Type-Options, X-Frame-Options)
-- 🔒 **CORS** — restricted to same-origin requests only
-- 🔒 **Rate Limiting** — 30 requests/minute per IP on `/api/chat`
-- 🔒 **Input Validation** — message type check, length limit (1-500 chars)
-- 🔒 **Input Sanitization** — HTML tag stripping to prevent XSS
-- 🔒 **Environment Variables** — API keys read from `.env`, never hardcoded
-- 🔒 **Body Size Limit** — JSON body capped at 16 KB
-- 🔒 **No X-Powered-By** — Express fingerprint header removed by Helmet
-- 🔒 **Graceful Shutdown** — SIGTERM/SIGINT handling prevents connection leaks
+```
+event-ai-concierge/
+├── public/                # Static frontend (vanilla JS + CSS)
+│   ├── index.html         # 3-tab shell (Chat / Map / Agenda)
+│   ├── styles.css         # Dark-glass design system, fully responsive
+│   ├── app.js             # Streaming, voice, TTS, map, agenda, PWA
+│   ├── manifest.webmanifest
+│   ├── sw.js              # Service worker — offline shell
+│   └── icon.svg
+├── src/
+│   ├── routes/chat.js     # /api/chat, /chat/stream, /vision, /event
+│   ├── services/gemini.js # Gemini SDK wrappers (text, stream, vision)
+│   ├── middleware/
+│   │   ├── rateLimit.js
+│   │   └── security.js    # Helmet CSP + same-origin CORS
+│   └── utils/
+│       ├── eventData.js   # InnovateSphere 2026 dataset w/ map coords
+│       └── prompts.js     # System prompts (text + vision)
+├── tests/                 # Jest + Supertest (chat, stream, vision, security, gemini)
+├── server.js              # Express entrypoint, graceful shutdown
+└── Dockerfile
+```
 
 ---
 
-## License
+## ♿ Accessibility (WCAG AA)
+
+- Semantic HTML5 landmarks, skip-to-content link, visible focus rings (3px solid)
+- `aria-live="polite"` on chat transcript; `role="alert"` on errors
+- Keyboard-only navigation (Tab, Enter to send, `.tab` role radio group)
+- Contrast ≥ 4.5:1 on all text + colour-blind-safe accent palette
+- `@media (prefers-reduced-motion: reduce)` disables every animation
+- Voice input + TTS playback as alternative interaction modes
+- Grounded prompt surfaces wheelchair routes, hearing loops, and quiet zones proactively
+
+---
+
+## 🔒 Security
+
+- **Helmet** — CSP, HSTS, nosniff, X-Frame-Options, no X-Powered-By
+- **CORS** — same-origin only; external origins rejected
+- **Rate limit** — 30 req/min/IP on every AI endpoint
+- **Input validation** — type check, 500-char cap, HTML-tag strip
+- **Image validation** — MIME allow-list, 5 MB cap, base-64 integrity check
+- **Body size** — 7 MB (covers encoded 5 MB image + JSON overhead)
+- **No secrets in client** — API key server-side only
+- **Graceful shutdown** — SIGTERM/SIGINT drains connections
+
+---
+
+## 📜 License
 
 MIT © Sunmount Solutions
