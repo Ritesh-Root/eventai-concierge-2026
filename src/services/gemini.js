@@ -1,11 +1,24 @@
+/**
+ * @fileoverview Gemini AI service — wraps the @google/generative-ai SDK.
+ * Provides three capabilities:
+ *   1. askGemini         — single-shot text chat, grounded in event data.
+ *   2. streamGemini      — async-iterable stream of text chunks (SSE-friendly).
+ *   3. askGeminiVision   — multi-modal (image + text) grounded reply.
+ * Includes retry-with-backoff for transient errors (429 / 5xx).
+ * @module services/gemini
+ */
+
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { buildSystemPrompt, buildVisionPrompt } = require('../utils/prompts');
 const eventData = require('../utils/eventData');
+
 const TEXT_MODEL = 'gemini-2.5-flash-lite';
 const VISION_MODEL = 'gemini-2.5-flash';
 const MAX_RETRIES = 2;
 const BASE_BACKOFF_MS = 300;
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 function isTransient(err) {
   const status = err?.status;
   const msg = (err?.message || '').toLowerCase();
@@ -14,11 +27,13 @@ function isTransient(err) {
   }
   return /rate.?limit|quota|resource_?exhausted|unavailable|overloaded|503|500|429/.test(msg);
 }
+
 function isAuthError(err) {
   const status = err?.status;
   const msg = (err?.message || '').toLowerCase();
   return status === 401 || status === 403 || /api_?key_?invalid|permission_?denied|unauthenti/.test(msg);
 }
+
 function getClient() {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -28,6 +43,7 @@ function getClient() {
   }
   return new GoogleGenerativeAI(apiKey);
 }
+
 function rethrow(err, lastErr = err) {
   if (isAuthError(err)) {
     const e = new Error('Invalid Gemini API key. Please check your configuration.');
@@ -43,6 +59,10 @@ function rethrow(err, lastErr = err) {
   e.code = 'UPSTREAM';
   throw e;
 }
+
+/**
+ * Single-shot text chat — returns the model's full reply.
+ */
 async function askGemini(userMessage, eventContext = eventData) {
   const genAI = getClient();
   const model = genAI.getGenerativeModel({
@@ -53,6 +73,7 @@ async function askGemini(userMessage, eventContext = eventData) {
       maxOutputTokens: 1024,
     },
   });
+
   let lastErr;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
     try {
@@ -71,8 +92,17 @@ async function askGemini(userMessage, eventContext = eventData) {
     }
   }
   rethrow(lastErr);
-  return ''; 
+  return ''; // unreachable
 }
+
+/**
+ * Streaming text chat — yields string chunks as Gemini produces them.
+ * Consumers can write each chunk to an SSE stream.
+ *
+ * @param {string} userMessage
+ * @param {object} [eventContext=eventData]
+ * @returns {AsyncGenerator<string>}
+ */
 async function* streamGemini(userMessage, eventContext = eventData) {
   const genAI = getClient();
   const model = genAI.getGenerativeModel({
@@ -83,6 +113,7 @@ async function* streamGemini(userMessage, eventContext = eventData) {
       maxOutputTokens: 1024,
     },
   });
+
   try {
     const result = await model.generateContentStream(userMessage);
     for await (const chunk of result.stream) {
@@ -94,12 +125,22 @@ async function* streamGemini(userMessage, eventContext = eventData) {
     rethrow(err);
   }
 }
+
+/**
+ * Multi-modal chat — accepts an image (base64) + optional text prompt.
+ *
+ * @param {{ data: string, mimeType: string }} image
+ * @param {string} [userText]
+ * @param {object} [eventContext=eventData]
+ * @returns {Promise<string>}
+ */
 async function askGeminiVision(image, userText = '', eventContext = eventData) {
   if (!image?.data || !image?.mimeType) {
     const e = new Error('Image data and mimeType are required for vision.');
     e.code = 'BAD_IMAGE';
     throw e;
   }
+
   const genAI = getClient();
   const model = genAI.getGenerativeModel({
     model: VISION_MODEL,
@@ -109,6 +150,7 @@ async function askGeminiVision(image, userText = '', eventContext = eventData) {
       maxOutputTokens: 1024,
     },
   });
+
   const parts = [
     { inlineData: { data: image.data, mimeType: image.mimeType } },
   ];
@@ -117,6 +159,7 @@ async function askGeminiVision(image, userText = '', eventContext = eventData) {
   } else {
     parts.push({ text: 'What is in this image, and how does it relate to the event?' });
   }
+
   let lastErr;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
     try {
@@ -139,6 +182,7 @@ async function askGeminiVision(image, userText = '', eventContext = eventData) {
   rethrow(lastErr);
   return '';
 }
+
 module.exports = {
   askGemini,
   streamGemini,

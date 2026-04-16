@@ -1,9 +1,18 @@
+/**
+ * @fileoverview Rich fake event data for demo purposes.
+ * Represents InnovateSphere 2026 — a full-day tech conference with sessions,
+ * speakers, booths, food, parking, restrooms, accessibility features, and
+ * map coordinates so the UI can render an interactive floor plan.
+ * @module utils/eventData
+ */
+
 const eventData = {
   name: 'InnovateSphere 2026',
   tagline: 'Where Ideas Converge',
   date: '2026-05-17',
   doorsOpen: '08:00',
   doorsClose: '18:30',
+
   venue: {
     name: 'Meridian Convention Centre',
     address: '1200 Innovation Drive, Bengaluru, Karnataka 560100',
@@ -11,11 +20,13 @@ const eventData = {
     totalCapacity: 2500,
     mapBox: { width: 1000, height: 600 },
   },
+
   wifi: {
     network: 'InnovateSphere-Guest',
     password: 'Sphere2026!',
     helpDesk: 'Visit the Info Kiosk near Gate A for connectivity issues.',
   },
+
   emergency: {
     securityDesk: 'Ground Floor, Gate B — available 24/7 during the event.',
     medicalRoom: 'Room G-04, Ground Floor (staffed paramedic on site).',
@@ -27,6 +38,7 @@ const eventData = {
     ],
     assemblyPoint: 'Parking Lot P1 — marked with yellow flags.',
   },
+
   sessions: [
     {
       id: 'S1',
@@ -180,6 +192,7 @@ const eventData = {
       map: { floor: 3, x: 620, y: 200, label: 'Terrace Garden' },
     },
   ],
+
   booths: [
     { id: 'B1', name: 'Google Cloud AI', location: 'Expo Hall, Aisle 1', category: 'Cloud & AI', perks: 'Live demos of Gemini; raffle for Pixel devices.', map: { floor: 1, x: 780, y: 120, label: 'Google Cloud' } },
     { id: 'B2', name: 'Vercel', location: 'Expo Hall, Aisle 1', category: 'Developer Tools', perks: 'On-site deploy challenge; free hoodies for first 100.', map: { floor: 1, x: 860, y: 120, label: 'Vercel' } },
@@ -192,17 +205,20 @@ const eventData = {
     { id: 'B9', name: 'Hugging Face', location: 'Expo Hall, Aisle 5', category: 'ML & Models', perks: 'Model fine-tuning consults; sticker wall.', map: { floor: 1, x: 780, y: 500, label: 'Hugging Face' } },
     { id: 'B10', name: 'GitHub', location: 'Expo Hall, Aisle 5', category: 'Developer Tools', perks: 'Copilot hackathon bracket; Octocat plushies.', map: { floor: 1, x: 860, y: 500, label: 'GitHub' } },
   ],
+
   quietZones: [
     { name: 'Zen Lounge', floor: 1, location: 'West Wing — near the indoor garden.', amenities: 'Comfortable seating, dim lighting, phone-free zone.', map: { floor: 1, x: 80, y: 400, label: 'Zen Lounge' } },
     { name: 'Focus Pod Area', floor: 2, location: 'East Corridor — individual sound-dampened pods.', amenities: 'Power outlets, adjustable lighting, bookable in 30-min slots at Info Kiosk.', map: { floor: 2, x: 720, y: 380, label: 'Focus Pods' } },
     { name: 'Terrace Garden', floor: 3, location: 'Open-air terrace — covered section available.', amenities: 'Fresh air, bench seating, water station.', map: { floor: 3, x: 620, y: 200, label: 'Terrace Garden' } },
   ],
+
   foodAndDrink: [
     { name: 'Barista Bar', floor: 1, location: 'Main Lobby — opposite Info Kiosk.', hours: '08:00–17:30', dietary: 'Oat, soy, almond milk. Decaf and matcha available.' },
     { name: 'Street Food Court', floor: 1, location: 'Garden Pavilion — lunch hours.', hours: '12:00–14:30', dietary: 'Vegan, vegetarian, gluten-free, halal stations clearly marked.' },
     { name: 'Snack Island', floor: 2, location: 'Central atrium, opposite elevator bank.', hours: '10:00–17:00', dietary: 'Nut-free zone; allergen cards on each tray.' },
     { name: 'Hydration Stations', floor: 'All', location: 'Every floor near elevators.', hours: 'All day', dietary: 'Still and sparkling water; bring your own bottle.' },
   ],
+
   parkingAndTransit: [
     { type: 'Parking — P1', capacity: 400, location: 'Main lot, Gate A entrance.', accessible: '20 designated accessible bays, level access to Gate A.' },
     { type: 'Parking — P2', capacity: 250, location: 'Overflow lot, 3-min shuttle from Gate C.', accessible: 'Shuttle has ramp access; runs every 7 minutes.' },
@@ -210,22 +226,26 @@ const eventData = {
     { type: 'Metro', capacity: null, location: 'Meridian Metro (Purple Line) — 6-min covered walk via Skybridge from Gate A.', accessible: 'Skybridge is step-free with tactile paving.' },
     { type: 'Rideshare Pickup', capacity: null, location: 'Gate B curb, clearly signposted.', accessible: 'Dropped kerb and seating at pickup zone.' },
   ],
+
   restrooms: [
     { floor: 0, location: 'Ground Floor, near Gate A & Gate B. Accessible and all-gender facilities available.' },
     { floor: 1, location: 'Floor 1 — between Grand Hall A and Workshop Lab B. Baby-change room adjacent.' },
     { floor: 2, location: 'Floor 2 — opposite Room 201. All-gender accessible stall.' },
     { floor: 3, location: 'Floor 3 — opposite Room 301 and near Terrace Garden entrance.' },
   ],
+
   lostAndFound: {
     location: 'Info Kiosk near Gate A, Ground Floor.',
     hours: '08:00–18:30',
     note: 'Unclaimed items are held for 30 days — email lostfound@innovatesphere.example.',
   },
+
   wheelchairAccessibleRoutes: [
     { name: 'Main Concourse Route', description: 'From Gate A entrance, proceed straight through the ground-floor lobby. Take the central elevator bank to any floor. All session rooms on Floors 1-2 are reachable without stairs. Width ≥ 1.5 m throughout.' },
     { name: 'Expo Hall Loop', description: 'Enter the Expo Hall via the wide double doors near Gate B. All aisles are ≥ 2 m wide with smooth flooring. Accessible restrooms are located at both ends of the hall.' },
     { name: 'Terrace Route', description: 'From any floor, use the East Elevator to Floor 3. Exit right for the Terrace Garden — the threshold is level and the covered section has bench seating with arm rests.' },
   ],
+
   accessibility: {
     serviceAnimals: 'Fully welcome. Water bowls available at every Info Kiosk.',
     signLanguage: 'ISL and ASL interpreters for all keynote sessions — front-row reserved area.',
@@ -234,11 +254,14 @@ const eventData = {
     largePrint: 'Printed programs in 18pt available at the Info Kiosk.',
     captioning: 'Live captions on-screen for all keynote and panel sessions.',
   },
+
   infoKiosks: [
     { id: 'K1', location: 'Ground Floor — Gate A Main Entrance', staffed: '08:00–18:30' },
     { id: 'K2', location: 'Floor 1 — Expo Hall entrance', staffed: '09:00–17:00' },
     { id: 'K3', location: 'Floor 2 — Central atrium', staffed: '09:00–17:00' },
   ],
+
   sponsors: ['Google Cloud', 'Vercel', 'Figma', 'Snyk', 'MongoDB', 'Stripe', 'GitHub', 'Hugging Face'],
 };
+
 module.exports = eventData;
