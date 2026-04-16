@@ -3,7 +3,7 @@
  *
  * Responsibilities:
  *   1. Load environment from .env (dotenv).
- *   2. Apply security middleware (Helmet, CORS, XSS, Mongo-sanitize).
+ *   2. Apply security middleware (Helmet, CORS, custom XSS sanitizer, Mongo-sanitize).
  *   3. Attach request-ID and structured Cloud Logging middleware.
  *   4. Parse JSON bodies, enable compression, serve static assets.
  *   5. Mount API routes and health-check endpoint.
@@ -20,8 +20,8 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const compression = require('compression');
-const xss = require('xss-clean');
 const mongoSanitize = require('express-mongo-sanitize');
+const { xssSanitize } = require('./src/middleware/sanitize');
 
 const config = require('./src/config');
 const logger = require('./src/utils/logger');
@@ -48,7 +48,7 @@ app.use(requestLogger());
 // 7 MB ceiling covers a base64-encoded 5 MB image plus JSON overhead.
 app.use(express.json({ limit: config.input.bodyLimit }));
 app.use(compression({ level: 6, threshold: 1024 }));
-app.use(xss());
+app.use(xssSanitize());
 app.use(mongoSanitize());
 
 // ── Static files ─────────────────────────────────────────────────────

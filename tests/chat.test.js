@@ -110,6 +110,30 @@ describe('POST /api/chat', () => {
       .expect(200);
     expect(res.body).toHaveProperty('reply');
   });
+
+  it('returns 429 on rate limit error from Gemini', async () => {
+    const err = new Error('Rate limit');
+    err.code = 'RATE_LIMIT';
+    askGemini.mockRejectedValueOnce(err);
+    const res = await request(app).post('/api/chat').send({ message: 'Hi' }).expect(429);
+    expect(res.body.error).toMatch(/busy/i);
+  });
+
+  it('returns 503 on NO_KEY error', async () => {
+    const err = new Error('Missing key');
+    err.code = 'NO_KEY';
+    askGemini.mockRejectedValueOnce(err);
+    const res = await request(app).post('/api/chat').send({ message: 'Hi' }).expect(503);
+    expect(res.body.error).toMatch(/unavailable/i);
+  });
+
+  it('returns 400 on BAD_IMAGE error code', async () => {
+    const err = new Error('Invalid image format');
+    err.code = 'BAD_IMAGE';
+    askGemini.mockRejectedValueOnce(err);
+    const res = await request(app).post('/api/chat').send({ message: 'Hi' }).expect(400);
+    expect(res.body.error).toMatch(/Invalid image/);
+  });
 });
 
 // ── POST /api/chat/stream ────────────────────────────────────────────
@@ -146,6 +170,27 @@ describe('POST /api/chat/stream', () => {
   it('returns 400 on invalid message', async () => {
     const res = await request(app).post('/api/chat/stream').send({}).expect(400);
     expect(res.body.error).toMatch(/message/i);
+  });
+
+  it('sends error event on stream failure', async () => {
+    streamGemini.mockImplementation(async function* () {
+      yield 'partial';
+      throw new Error('Stream crashed');
+    });
+
+    const res = await request(app)
+      .post('/api/chat/stream')
+      .send({ message: 'Hi' })
+      .buffer(true)
+      .parse((r, cb) => {
+        r.setEncoding('utf8');
+        let data = '';
+        r.on('data', (c) => { data += c; });
+        r.on('end', () => cb(null, data));
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatch(/event: error/);
   });
 });
 
@@ -195,6 +240,17 @@ describe('POST /api/vision', () => {
     const largeImage = 'data:image/png;base64,' + 'A'.repeat(7200000);
     const res = await request(app).post('/api/vision').send({ image: largeImage }).expect(413);
     expect(res.body.error).toMatch(/large/i);
+  });
+
+  it('returns 500 on vision service error', async () => {
+    askGeminiVision.mockRejectedValueOnce(new Error('Vision model failed'));
+    const validImage =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABAQMAAAAl21bKAAAAA1BMVEX///+nxBvIAAAAC0lEQVR4nGNgAAIAAAUAAeImBZsAAAAASUVORK5CYII=';
+    const res = await request(app)
+      .post('/api/vision')
+      .send({ image: validImage, prompt: 'test' })
+      .expect(500);
+    expect(res.body.error).toMatch(/went wrong/i);
   });
 });
 

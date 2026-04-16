@@ -3,19 +3,37 @@
   "version": "1.0.0",
   "description": "AI-powered concierge for physical event attendees — schedule, navigation, networking, accessibility, and Q&A via Gemini 2.5 Flash",
   "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ritesh-Root/eventai-concierge-2026.git"
+  },
+  "homepage": "https://event-ai-concierge-520503380800.us-central1.run.app",
+  "bugs": {
+    "url": "https://github.com/Ritesh-Root/eventai-concierge-2026/issues"
+  },
   "scripts": {
     "start": "NODE_ENV=production node server.js",
     "dev": "node --watch server.js",
     "test": "jest --coverage --forceExit --detectOpenHandles",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "validate": "npm run lint && npm test"
   },
   "keywords": [
     "event",
     "ai",
     "concierge",
     "gemini",
-    "accessibility"
+    "google-ai",
+    "streaming",
+    "vision",
+    "accessibility",
+    "pwa",
+    "cloud-run"
   ],
   "author": "Sunmount Solutions",
   "license": "MIT",
@@ -27,8 +45,7 @@
     "express": "^4.21.2",
     "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^7.5.0",
-    "helmet": "^8.0.0",
-    "xss-clean": "^0.1.4"
+    "helmet": "^8.0.0"
   },
   "devDependencies": {
     "eslint": "^8.57.1",
@@ -44,10 +61,10 @@
     ],
     "coverageThreshold": {
       "global": {
-        "lines": 70,
-        "branches": 60,
-        "functions": 70,
-        "statements": 70
+        "lines": 80,
+        "branches": 70,
+        "functions": 80,
+        "statements": 80
       }
     }
   }

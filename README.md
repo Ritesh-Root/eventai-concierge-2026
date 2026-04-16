@@ -177,17 +177,22 @@ event-ai-concierge/
 │   │   ├── rateLimit.js       # IP-based rate limiting
 │   │   ├── security.js        # Helmet CSP + Permissions-Policy + CORS
 │   │   ├── validate.js        # Input validation middleware
+│   │   ├── sanitize.js        # Custom XSS sanitizer (replaces xss-clean)
 │   │   └── requestId.js       # X-Request-Id + Cloud Trace correlation
 │   └── utils/
 │       ├── eventData.js       # InnovateSphere 2026 dataset w/ map coords
 │       ├── prompts.js         # System prompts (text + vision)
 │       ├── logger.js          # Structured logger (JSON prod / colour dev)
 │       └── errors.js          # Typed error hierarchy (AppError tree)
-├── tests/                     # 9 test suites — Jest + Supertest
+├── tests/                     # 13 test suites — Jest + Supertest
 │   ├── chat.test.js           # API integration tests
 │   ├── security.test.js       # Security header verification
-│   ├── gemini.test.js         # Gemini service unit tests
+│   ├── gemini.test.js         # Gemini service unit tests (text, stream, vision)
 │   ├── validation.test.js     # Input validation edge cases
+│   ├── sanitize.test.js       # XSS sanitizer unit tests
+│   ├── prompts.test.js        # System prompt builder tests
+│   ├── requestId.test.js      # Request-ID middleware tests
+│   ├── cloudLogging.test.js   # Cloud Logging structured output
 │   ├── config.test.js         # Config immutability & defaults
 │   ├── logger.test.js         # Structured logging output
 │   ├── errors.test.js         # Error class hierarchy
@@ -202,23 +207,23 @@ event-ai-concierge/
 
 ## 🧪 Testing Strategy
 
-**9 test suites** with **90+ test cases** covering:
+**13 test suites** with **206 test cases** covering:
 
 | Layer | What's Tested |
 |---|---|
 | **API Integration** | All 5 endpoints (chat, stream, vision, event, health) — happy path, validation errors, upstream errors |
 | **Security** | Helmet headers, CSP directives, CORS rejection, Request-ID generation, body size limits |
 | **Validation** | Chat message boundaries, image MIME types, XSS payloads, oversized inputs |
-| **Service** | Gemini SDK mocking, retry-with-backoff, error classification |
+| **Service** | Gemini SDK mocking, retry-with-backoff, streaming generators, vision multimodal, error classification |
 | **Data Integrity** | Unique IDs, valid floors, parseable times, map bounds, accessibility fields |
-| **Infrastructure** | Config immutability, logger output format, error class hierarchy, rate limiter factory |
+| **Infrastructure** | Config immutability, logger output format (test/prod/dev), error class hierarchy, rate limiter factory, XSS sanitizer |
 
 ```bash
 npm test              # Run all tests with coverage
 npm test -- --verbose # Detailed output
 ```
 
-Coverage thresholds: **70% lines / 60% branches / 70% functions / 70% statements**
+Coverage thresholds: **80% lines / 70% branches / 80% functions / 80% statements**
 
 ---
 
@@ -247,13 +252,14 @@ Coverage thresholds: **70% lines / 60% branches / 70% functions / 70% statements
 - **Cloud Trace** — `X-Cloud-Trace-Context` correlation for distributed tracing on Cloud Run
 - **Rate limit** — 30 req/min/IP on every AI endpoint (express-rate-limit with standard headers)
 - **Input validation** — dedicated middleware: type check, 500-char cap, HTML-tag strip
+- **XSS sanitization** — custom dependency-free recursive sanitizer (replaces deprecated `xss-clean`)
 - **Image validation** — MIME allow-list (JPEG/PNG/WebP/HEIC/HEIF), 5 MB cap, base-64 integrity
 - **Body size** — 7 MB Express limit (covers encoded 5 MB image + JSON overhead)
 - **No secrets in client** — API key server-side only, `.env` in `.gitignore`
 - **Typed errors** — `AppError` hierarchy prevents stack trace leakage to clients
 - **Graceful shutdown** — SIGTERM/SIGINT drains connections with 5s timeout
 - **Non-root container** — Docker runs as `app` user for defense-in-depth
-- **Dependency hygiene** — `npm ci --omit=dev` in production, `express-mongo-sanitize` against NoSQL injection
+- **Dependency hygiene** — zero deprecated packages, `npm ci --omit=dev` in production, `express-mongo-sanitize` against NoSQL injection
 
 ---
 
