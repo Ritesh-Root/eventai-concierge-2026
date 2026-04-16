@@ -1,6 +1,10 @@
 /**
- * @fileoverview Integration tests for /api routes (chat, stream, vision, event).
+ * @fileoverview Integration tests for /api routes (chat, stream, vision, event, health).
+ * Uses mocked Gemini service to validate request routing, validation, caching,
+ * error handling, and response shapes without hitting the real API.
  */
+
+'use strict';
 
 const request = require('supertest');
 
@@ -14,6 +18,8 @@ jest.mock('../src/services/gemini', () => ({
 
 const app = require('../server');
 const { askGemini, streamGemini, askGeminiVision } = require('../src/services/gemini');
+
+// ── POST /api/chat ───────────────────────────────────────────────────
 
 describe('POST /api/chat', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -53,6 +59,14 @@ describe('POST /api/chat', () => {
     expect(res.body.error).toMatch(/1 and 500/);
   });
 
+  it('accepts message at exactly 500 characters', async () => {
+    const res = await request(app)
+      .post('/api/chat')
+      .send({ message: 'a'.repeat(500) })
+      .expect(200);
+    expect(res.body).toHaveProperty('reply');
+  });
+
   it('strips HTML tags (sanitize)', async () => {
     await request(app)
       .post('/api/chat')
@@ -67,6 +81,11 @@ describe('POST /api/chat', () => {
     expect(res.headers).toHaveProperty('ratelimit-remaining');
   });
 
+  it('returns X-Request-Id header', async () => {
+    const res = await request(app).post('/api/chat').send({ message: 'Hi' }).expect(200);
+    expect(res.headers).toHaveProperty('x-request-id');
+  });
+
   it('returns 500 on generic Gemini error', async () => {
     askGemini.mockRejectedValueOnce(new Error('Something broke'));
     const res = await request(app).post('/api/chat').send({ message: 'Hi' }).expect(500);
@@ -78,7 +97,22 @@ describe('POST /api/chat', () => {
     const res = await request(app).post('/api/chat').send({ message: 'Hi' }).expect(503);
     expect(res.body.error).toMatch(/unavailable/i);
   });
+
+  it('returns proper JSON Content-Type', async () => {
+    const res = await request(app).post('/api/chat').send({ message: 'Hi' });
+    expect(res.headers['content-type']).toMatch(/application\/json/);
+  });
+
+  it('handles messages with Unicode correctly', async () => {
+    const res = await request(app)
+      .post('/api/chat')
+      .send({ message: 'Où est la conférence? 🎉' })
+      .expect(200);
+    expect(res.body).toHaveProperty('reply');
+  });
 });
+
+// ── POST /api/chat/stream ────────────────────────────────────────────
 
 describe('POST /api/chat/stream', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -96,7 +130,9 @@ describe('POST /api/chat/stream', () => {
       .parse((r, cb) => {
         r.setEncoding('utf8');
         let data = '';
-        r.on('data', (c) => { data += c; });
+        r.on('data', (c) => {
+          data += c;
+        });
         r.on('end', () => cb(null, data));
       });
 
@@ -113,8 +149,11 @@ describe('POST /api/chat/stream', () => {
   });
 });
 
+// ── POST /api/vision ─────────────────────────────────────────────────
+
 describe('POST /api/vision', () => {
-  const validImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABAQMAAAAl21bKAAAAA1BMVEX///+nxBvIAAAAC0lEQVR4nGNgAAIAAAUAAeImBZsAAAAASUVORK5CYII=';
+  const validImage =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABAQMAAAAl21bKAAAAA1BMVEX///+nxBvIAAAAC0lEQVR4nGNgAAIAAAUAAeImBZsAAAAASUVORK5CYII=';
 
   beforeEach(() => jest.clearAllMocks());
 
@@ -133,7 +172,10 @@ describe('POST /api/vision', () => {
   });
 
   it('returns 400 when image is not a data URL', async () => {
-    const res = await request(app).post('/api/vision').send({ image: 'https://example.com/x.png' }).expect(400);
+    const res = await request(app)
+      .post('/api/vision')
+      .send({ image: 'https://example.com/x.png' })
+      .expect(400);
     expect(res.body.error).toMatch(/data URL|base64/i);
   });
 
@@ -149,28 +191,39 @@ describe('POST /api/vision', () => {
   });
 
   it('returns 413 when image exceeds size limit', async () => {
-    // 6MB of base64
-    const largeImage = 'data:image/png;base64,' + 'A'.repeat(6 * 1024 * 1024);
+    // ~7.2 MB of base64 decodes to ~5.4 MB, exceeding the 5 MB limit.
+    const largeImage = 'data:image/png;base64,' + 'A'.repeat(7200000);
     const res = await request(app).post('/api/vision').send({ image: largeImage }).expect(413);
     expect(res.body.error).toMatch(/large/i);
   });
 });
 
+// ── GET /api/event ───────────────────────────────────────────────────
+
 describe('GET /api/event', () => {
-  it('returns the event dataset', async () => {
+  it('returns the event dataset with expected shape', async () => {
     const res = await request(app).get('/api/event').expect(200);
     expect(res.body).toHaveProperty('name');
     expect(res.body).toHaveProperty('sessions');
     expect(Array.isArray(res.body.sessions)).toBe(true);
+    expect(res.body).toHaveProperty('booths');
+    expect(res.body).toHaveProperty('venue');
   });
 });
 
+// ── GET /api/health ──────────────────────────────────────────────────
+
 describe('GET /api/health', () => {
-  it('returns status ok', async () => {
+  it('returns status ok with metadata', async () => {
     const res = await request(app).get('/api/health').expect(200);
     expect(res.body).toHaveProperty('status', 'ok');
+    expect(res.body).toHaveProperty('timestamp');
+    expect(res.body).toHaveProperty('version');
+    expect(res.body).toHaveProperty('uptime');
   });
 });
+
+// ── 404 handler ──────────────────────────────────────────────────────
 
 describe('404 handler', () => {
   it('returns 404 for unknown routes', async () => {

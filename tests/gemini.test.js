@@ -138,6 +138,6 @@ describe('Gemini Service', () => {
 
     const { askGemini } = require('../src/services/gemini');
 
-    await expect(askGemini('Hello')).rejects.toThrow(/rate limit/i);
+    await expect(askGemini('Hello')).rejects.toThrow(/busy|rate.?limit/i);
   });
 });

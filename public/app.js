@@ -83,7 +83,7 @@
     el.tabs.forEach((btn) => {
       btn.addEventListener('click', () => {
         const tab = btn.dataset.tab;
-        if (tab === state.activeTab) return;
+        if (tab === state.activeTab) {return;}
         state.activeTab = tab;
         el.tabs.forEach((t) => {
           const active = t.dataset.tab === tab;
@@ -114,7 +114,7 @@
   function wireChips() {
     $$('.chip[data-query]').forEach((chip) => {
       chip.addEventListener('click', () => {
-        if (state.isLoading) return;
+        if (state.isLoading) {return;}
         const query = chip.getAttribute('data-query');
         el.chatInput.value = query;
         handleSubmit(new Event('submit', { cancelable: true }));
@@ -129,10 +129,10 @@
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (state.isLoading) return;
+    if (state.isLoading) {return;}
 
     const message = el.chatInput.value.trim();
-    if (!message) return;
+    if (!message) {return;}
 
     el.chatInput.value = '';
     autoResize();
@@ -162,9 +162,9 @@
       aiBubble.innerHTML = formatAIResponse(visibleText);
       if (cards && cards.length) {
         const rail = renderCardRail(cards);
-        if (rail) aiBubble.appendChild(rail);
+        if (rail) {aiBubble.appendChild(rail);}
       }
-      if (state.ttsEnabled && visibleText.trim()) speak(visibleText);
+      if (state.ttsEnabled && visibleText.trim()) {speak(visibleText);}
       highlightRoomsFromCards(cards);
     } catch (err) {
       aiBubble.remove();
@@ -195,7 +195,7 @@
         body: JSON.stringify({ message }),
       });
       const data = await fallback.json().catch(() => ({}));
-      if (!fallback.ok) throw new Error(data.error || `Server error (${fallback.status})`);
+      if (!fallback.ok) {throw new Error(data.error || `Server error (${fallback.status})`);}
       onChunk(data.reply || '');
       return;
     }
@@ -203,9 +203,10 @@
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       const { value, done } = await reader.read();
-      if (done) break;
+      if (done) {break;}
       buffer += decoder.decode(value, { stream: true });
 
       // Parse SSE frames
@@ -218,13 +219,13 @@
         let event = 'message';
         let data = '';
         for (const line of lines) {
-          if (line.startsWith('event:')) event = line.slice(6).trim();
-          else if (line.startsWith('data:')) data += line.slice(5).trim();
+          if (line.startsWith('event:')) {event = line.slice(6).trim();}
+          else if (line.startsWith('data:')) {data += line.slice(5).trim();}
         }
         if (event === 'chunk') {
           try {
             const parsed = JSON.parse(data);
-            if (parsed.text) onChunk(parsed.text);
+            if (parsed.text) {onChunk(parsed.text);}
           } catch {
             // ignore
           }
@@ -273,7 +274,7 @@
   function stripCardMarker(text) {
     const re = /<CARDS>(.*?)<\/CARDS>\s*$/s;
     const match = text.match(re);
-    if (!match) return { visibleText: text, cards: [] };
+    if (!match) {return { visibleText: text, cards: [] };}
     const visibleText = text.replace(re, '').trim();
     try {
       const parsed = JSON.parse(match[1]);
@@ -284,7 +285,7 @@
   }
 
   function renderCardRail(cards) {
-    if (!state.event || !cards.length) return null;
+    if (!state.event || !cards.length) {return null;}
     const rail = document.createElement('div');
     rail.className = 'card-rail';
     let made = 0;
@@ -303,7 +304,7 @@
     node.className = 'rich-card';
     if (item.type === 'session' && item.id) {
       const s = state.event.sessions.find((x) => x.id === item.id);
-      if (!s) return null;
+      if (!s) {return null;}
       node.innerHTML = `
         <div class="rc-type">Session · ${escapeHTML(s.track)}</div>
         <div class="rc-title">${escapeHTML(s.title)}</div>
@@ -315,7 +316,7 @@
         </div>`;
     } else if (item.type === 'booth' && item.id) {
       const b = state.event.booths.find((x) => x.id === item.id);
-      if (!b) return null;
+      if (!b) {return null;}
       node.innerHTML = `
         <div class="rc-type">Booth · ${escapeHTML(b.category)}</div>
         <div class="rc-title">${escapeHTML(b.name)}</div>
@@ -338,7 +339,7 @@
 
     node.addEventListener('click', (e) => {
       const btn = e.target.closest('.rc-btn');
-      if (!btn) return;
+      if (!btn) {return;}
       const action = btn.dataset.action;
       if (action === 'save') {
         toggleSaved(btn.dataset.id);
@@ -395,7 +396,7 @@
     let rec;
     let transcript = '';
     const start = () => {
-      if (state.isLoading) return;
+      if (state.isLoading) {return;}
       transcript = '';
       rec = new SR();
       rec.lang = 'en-US';
@@ -403,7 +404,7 @@
       rec.continuous = false;
       rec.onresult = (ev) => {
         let s = '';
-        for (let i = ev.resultIndex; i < ev.results.length; i++) s += ev.results[i][0].transcript;
+        for (let i = ev.resultIndex; i < ev.results.length; i++) {s += ev.results[i][0].transcript;}
         transcript = s;
         el.chatInput.value = s;
         autoResize();
@@ -438,7 +439,7 @@
     el.ttsBtn.addEventListener('click', () => {
       state.ttsEnabled = !state.ttsEnabled;
       el.ttsBtn.setAttribute('aria-pressed', String(state.ttsEnabled));
-      if (!state.ttsEnabled) speechSynthesis.cancel();
+      if (!state.ttsEnabled) {speechSynthesis.cancel();}
     });
   }
   function speak(text) {
@@ -457,7 +458,7 @@
     el.imageInput.addEventListener('change', async () => {
       const file = el.imageInput.files?.[0];
       el.imageInput.value = '';
-      if (!file) return;
+      if (!file) {return;}
       if (file.size > 5 * 1024 * 1024) {
         showError('Image is too large — please pick something under 5 MB.');
         return;
@@ -488,14 +489,14 @@
           body: JSON.stringify({ image: dataUrl, prompt: el.chatInput.value || '' }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Vision failed');
+        if (!res.ok) {throw new Error(data.error || 'Vision failed');}
         const { visibleText, cards } = stripCardMarker(data.reply || '');
         aiBubble.innerHTML = formatAIResponse(visibleText);
         if (cards.length) {
           const rail = renderCardRail(cards);
-          if (rail) aiBubble.appendChild(rail);
+          if (rail) {aiBubble.appendChild(rail);}
         }
-        if (state.ttsEnabled && visibleText.trim()) speak(visibleText);
+        if (state.ttsEnabled && visibleText.trim()) {speak(visibleText);}
         highlightRoomsFromCards(cards);
       } catch (err) {
         aiBubble.remove();
@@ -515,7 +516,7 @@
     });
   }
   function switchTab(tab) {
-    if (state.activeTab === tab) return;
+    if (state.activeTab === tab) {return;}
     const target = Array.from(el.tabs).find((t) => t.dataset.tab === tab);
     target && target.click();
   }
@@ -530,7 +531,7 @@
   }
 
   function renderMap(floor) {
-    if (!state.event) return;
+    if (!state.event) {return;}
     const { width, height } = state.event.venue.mapBox;
 
     const allItems = [
@@ -582,7 +583,7 @@
   }
 
   function showMapDetail(item) {
-    if (!item) return;
+    if (!item) {return;}
     const title = item.label || item.name || 'Location';
     const extra = item.meta || item.description || '';
     el.mapDetail.innerHTML = `<strong>${escapeHTML(title)}</strong> — ${escapeHTML(extra)}`;
@@ -590,10 +591,10 @@
   }
 
   function highlightRoom(label) {
-    if (!label) return;
+    if (!label) {return;}
     requestAnimationFrame(() => {
       const rect = el.mapSurface.querySelector(`.map-room[data-label="${cssEscape(label)}"]`);
-      if (!rect) return;
+      if (!rect) {return;}
       el.mapSurface.querySelectorAll('.map-room').forEach((r) => r.classList.remove('is-highlight'));
       rect.classList.add('is-highlight');
       rect.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -601,7 +602,7 @@
   }
 
   function highlightRoomsFromCards(cards) {
-    if (!cards || !cards.length || !state.event) return;
+    if (!cards || !cards.length || !state.event) {return;}
     // Pick first referenced location and switch to its floor quietly
     for (const c of cards) {
       let floor, label;
@@ -638,7 +639,7 @@
   // ── Agenda ──────────────────────────────────────────────────────
   function wireAgenda() {
     el.agendaRecommend.addEventListener('click', async () => {
-      if (!state.event) return;
+      if (!state.event) {return;}
       el.agendaRecommend.disabled = true;
       el.agendaRecommend.textContent = 'Thinking…';
       try {
@@ -651,7 +652,7 @@
           }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed');
+        if (!res.ok) {throw new Error(data.error || 'Failed');}
         // Parse session IDs from the response
         const ids = (data.reply.match(/\bS\d+\b/g) || []).filter((id, i, a) => a.indexOf(id) === i);
         ids.forEach((id) => {
@@ -675,7 +676,7 @@
   }
 
   function populateTrackFilter() {
-    if (!state.event) return;
+    if (!state.event) {return;}
     const tracks = [...new Set(state.event.sessions.map((s) => s.track))].sort();
     tracks.forEach((t) => {
       const opt = document.createElement('option');
@@ -686,7 +687,7 @@
   }
 
   function renderAgenda() {
-    if (!state.event) return;
+    if (!state.event) {return;}
     const filter = el.trackFilter.value;
     const list = state.event.sessions
       .filter((s) => (filter ? s.track === filter : true))
@@ -720,8 +721,8 @@
 
   function toggleSaved(id) {
     const idx = state.savedSessions.indexOf(id);
-    if (idx >= 0) state.savedSessions.splice(idx, 1);
-    else state.savedSessions.push(id);
+    if (idx >= 0) {state.savedSessions.splice(idx, 1);}
+    else {state.savedSessions.push(id);}
     persistSaved();
   }
 
@@ -738,7 +739,7 @@
 
   // ── .ics export ─────────────────────────────────────────────────
   function exportICS() {
-    if (!state.event) return;
+    if (!state.event) {return;}
     const saved = state.event.sessions.filter((s) => state.savedSessions.includes(s.id));
     if (!saved.length) {
       showError('Star at least one session to export your agenda.');

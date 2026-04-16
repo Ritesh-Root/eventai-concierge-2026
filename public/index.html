@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="description" content="EventAI Concierge — your AI-powered guide for InnovateSphere 2026. Chat, voice, photo-search, interactive map, and a personal agenda, all powered by Gemini." />
   <meta name="theme-color" content="#0b0b18" />
+  <meta name="robots" content="index, follow" />
+  <meta name="author" content="Sunmount Solutions" />
   <title>EventAI Concierge — InnovateSphere 2026</title>
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" type="image/svg+xml" href="/icon.svg" />
@@ -168,9 +170,28 @@
   <footer class="site-footer" role="contentinfo">
     <p>
       <strong>Powered by Gemini 2.5 Flash</strong> · Streaming · Vision · Voice ·
-      <a href="https://github.com/Ritesh-Root/event-ai-concierge" aria-label="View source on GitHub">GitHub</a>
+      <a href="https://github.com/Ritesh-Root/eventai-concierge-2026" aria-label="View source on GitHub" rel="noopener noreferrer">GitHub</a>
     </p>
   </footer>
+
+  <!-- Structured data for search engines and accessibility tooling -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "EventAI Concierge",
+    "description": "AI-powered concierge for physical event attendees",
+    "applicationCategory": "UtilitiesApplication",
+    "operatingSystem": "Web",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "author": { "@type": "Organization", "name": "Sunmount Solutions" },
+    "accessibilityFeature": [
+      "alternativeText", "highContrastDisplay", "largePrint",
+      "readingOrder", "structuralNavigation", "tableOfContents"
+    ],
+    "accessibilityHazard": "none"
+  }
+  </script>
 
   <script src="app.js" defer></script>
 </body>
