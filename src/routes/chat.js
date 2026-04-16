@@ -23,12 +23,14 @@ const responseCache = new Map();
 const CACHE_TTL = 10 * 60 * 1000; // 10 mins
 
 function getCached(key) {
+  if (process.env.NODE_ENV === 'test') return null;
   const item = responseCache.get(key);
   if (item && Date.now() - item.time < CACHE_TTL) return item.value;
   return null;
 }
 
 function setCache(key, value) {
+  if (process.env.NODE_ENV === 'test') return;
   responseCache.set(key, { value, time: Date.now() });
   if (responseCache.size > 500) {
     responseCache.delete(responseCache.keys().next().value);
