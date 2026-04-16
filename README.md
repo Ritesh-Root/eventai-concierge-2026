@@ -2,7 +2,7 @@
 
 > A multi-modal AI concierge that helps attendees *live* a physical event — grounded in venue data, streamed from Gemini 2.5 Flash, with voice, vision, an interactive floor map, and a personal agenda builder.
 
-**Challenge:** Physical Event Experience
+**Chosen vertical:** Physical Event Experience
 **Model:** Gemini 2.5 Flash (text streaming + function-ready JSON) and Gemini 2.5 Flash Vision (image analysis)
 
 ---
@@ -24,7 +24,7 @@ All of it grounded in a structured event dataset so the model can never hallucin
 
 ---
 
-## 🧠 Architecture
+## 🧠 Approach and logic
 
 ```mermaid
 flowchart LR
@@ -43,6 +43,8 @@ flowchart LR
 
 The server is a small Express app; all the intelligence is in the prompt + the Gemini service.
 
+## ⚙️ How the solution works
+
 ### Request flow (text chat)
 
 1. User types, speaks, or taps a chip.
@@ -58,6 +60,12 @@ The server is a small Express app; all the intelligence is in the prompt + the G
 2. Frontend reads as base-64 data URL, `POST /api/vision`.
 3. Server decodes the data URL, validates the MIME, and calls `askGeminiVision()` with the image + event grounding.
 4. Gemini identifies the subject, matches it to the event (booth, session poster, map panel, plate), and responds with text + the same `<CARDS>` contract.
+
+## 📌 Assumptions made
+
+- **Connectivity:** Venue Wi-Fi might be spotty, so we assume attendees need offline-persistent UI components (fulfilled via a PWA service-worker shell).
+- **Data Grounding Layout:** We assume the venue coordinates within the event JSON statically align with the embedded `.SVG` mapping regions in the Frontend dashboard.
+- **Visual Subject Conditions:** Attendees might take photos in busy and dimly lit areas; we assume Gemini 2.5 Flash Vision is highly robust at finding the core subject despite background noise.
 
 ---
 
