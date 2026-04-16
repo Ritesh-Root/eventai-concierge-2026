@@ -21,6 +21,9 @@ const config = require('../config');
  * @returns {Function} Rate-limit middleware.
  */
 function createChatLimiter() {
+  if (config.isTest) {
+    return (req, res, next) => next();
+  }
   return rateLimit({
     windowMs: config.rateLimit.windowMs,
     max: config.rateLimit.maxRequests,

@@ -113,13 +113,97 @@ describe('Cloud Logging - requestLogger()', () => {
     expect(typeof middleware).toBe('function');
   });
 
-  it('should call next() in test mode', () => {
+  it('should call next() and attach finish listener', () => {
     const middleware = requestLogger();
-    const req = { method: 'GET', originalUrl: '/api/health', id: 'test' };
-    const res = { on: jest.fn(), statusCode: 200 };
+    const req = { method: 'GET', originalUrl: '/api/health', id: 'test-123' };
+    const listeners = {};
+    const res = {
+      on: (event, cb) => { listeners[event] = cb; },
+      statusCode: 200,
+    };
     const next = jest.fn();
 
     middleware(req, res, next);
     expect(next).toHaveBeenCalled();
+    expect(listeners.finish).toBeDefined();
+  });
+
+  it('should log INFO on 2xx responses when finish fires', () => {
+    const spy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const middleware = requestLogger();
+    const req = { method: 'GET', originalUrl: '/api/health', id: 'req-200' };
+    const listeners = {};
+    const res = {
+      on: (event, cb) => { listeners[event] = cb; },
+      statusCode: 200,
+    };
+
+    middleware(req, res, jest.fn());
+    listeners.finish();
+
+    expect(spy).toHaveBeenCalled();
+    const output = JSON.parse(spy.mock.calls[0][0]);
+    expect(output.severity).toBe('INFO');
+    expect(output.message).toContain('GET /api/health 200');
+    expect(output.requestId).toBe('req-200');
+    expect(output.latencyMs).toBeDefined();
+    expect(output['logging.googleapis.com/labels'].method).toBe('GET');
+    expect(output['logging.googleapis.com/labels'].status).toBe('200');
+    spy.mockRestore();
+  });
+
+  it('should log WARNING on 4xx responses', () => {
+    const spy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const middleware = requestLogger();
+    const req = { method: 'POST', originalUrl: '/api/chat', id: 'req-400' };
+    const listeners = {};
+    const res = {
+      on: (event, cb) => { listeners[event] = cb; },
+      statusCode: 404,
+    };
+
+    middleware(req, res, jest.fn());
+    listeners.finish();
+
+    expect(spy).toHaveBeenCalled();
+    const output = JSON.parse(spy.mock.calls[0][0]);
+    expect(output.severity).toBe('WARNING');
+    spy.mockRestore();
+  });
+
+  it('should log ERROR on 5xx responses', () => {
+    const spy = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const middleware = requestLogger();
+    const req = { method: 'POST', originalUrl: '/api/chat', id: 'req-500' };
+    const listeners = {};
+    const res = {
+      on: (event, cb) => { listeners[event] = cb; },
+      statusCode: 500,
+    };
+
+    middleware(req, res, jest.fn());
+    listeners.finish();
+
+    const output = JSON.parse(spy.mock.calls[0][0]);
+    expect(output.severity).toBe('ERROR');
+    spy.mockRestore();
+  });
+
+  it('should include traceId when available on request', () => {
+    const spy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const middleware = requestLogger();
+    const req = { method: 'GET', originalUrl: '/api/event', id: 'r1', traceId: 'trace-abc' };
+    const listeners = {};
+    const res = {
+      on: (event, cb) => { listeners[event] = cb; },
+      statusCode: 200,
+    };
+
+    middleware(req, res, jest.fn());
+    listeners.finish();
+
+    const output = JSON.parse(spy.mock.calls[0][0]);
+    expect(output.message).toContain('200');
+    spy.mockRestore();
   });
 });

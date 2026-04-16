@@ -96,4 +96,18 @@ describe('Config module', () => {
     expect(config.isProduction).toBe(true);
     expect(config.isTest).toBe(false);
   });
+
+  it('should throw when GEMINI_API_KEY is missing in production', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.GEMINI_API_KEY;
+    jest.resetModules();
+    expect(() => require('../src/config')).toThrow(/Missing required environment variable.*GEMINI_API_KEY/);
+  });
+
+  it('should throw when GEMINI_API_KEY is blank in production', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.GEMINI_API_KEY = '   ';
+    jest.resetModules();
+    expect(() => require('../src/config')).toThrow(/Missing required environment variable/);
+  });
 });

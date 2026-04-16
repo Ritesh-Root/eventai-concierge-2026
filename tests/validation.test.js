@@ -267,4 +267,29 @@ describe('validateVisionInput()', () => {
     expect(next).toHaveBeenCalled();
     expect(req.imageData.mimeType).toBe('image/webp');
   });
+
+  it('rejects malformed data URL that starts with data: but has bad format', () => {
+    const bad = 'data:not-valid-at-all-missing-semicolon-and-base64';
+    const req = mockReq({ image: bad });
+    const res = mockRes();
+    const next = jest.fn();
+
+    validateVisionInput(req, res, next);
+
+    expect(res.statusCode).toBe(400);
+    expect(res._json.error).toMatch(/base64 data URL/i);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('rejects data URL with invalid base64 characters', () => {
+    const bad = 'data:image/png;base64,!!!invalid!!!';
+    const req = mockReq({ image: bad });
+    const res = mockRes();
+    const next = jest.fn();
+
+    validateVisionInput(req, res, next);
+
+    expect(res.statusCode).toBe(400);
+    expect(next).not.toHaveBeenCalled();
+  });
 });

@@ -291,5 +291,45 @@ describe('Gemini Service', () => {
       const callArgs = mockGetGenerativeModel.mock.calls[0][0];
       expect(callArgs.systemInstruction).toContain('analysing a photo');
     });
+
+    it('should retry on transient vision errors then succeed', async () => {
+      const transientErr = new Error('Service overloaded');
+      transientErr.status = 503;
+      mockGenerateContent
+        .mockRejectedValueOnce(transientErr)
+        .mockResolvedValueOnce({
+          response: { text: () => 'Recovered vision response.' },
+        });
+
+      const { askGeminiVision } = require('../src/services/gemini');
+      const reply = await askGeminiVision(
+        { data: 'x', mimeType: 'image/png' },
+        'test'
+      );
+      expect(reply).toBe('Recovered vision response.');
+      expect(mockGenerateContent).toHaveBeenCalledTimes(2);
+    });
+
+    it('should throw on non-transient vision errors', async () => {
+      const nonTransient = new Error('Content blocked');
+      nonTransient.status = 400;
+      mockGenerateContent.mockRejectedValue(nonTransient);
+
+      const { askGeminiVision } = require('../src/services/gemini');
+      await expect(
+        askGeminiVision({ data: 'x', mimeType: 'image/png' }, 'test')
+      ).rejects.toThrow();
+    });
+
+    it('should throw AuthError on vision auth failures', async () => {
+      const authErr = new Error('API key invalid');
+      authErr.status = 401;
+      mockGenerateContent.mockRejectedValue(authErr);
+
+      const { askGeminiVision } = require('../src/services/gemini');
+      await expect(
+        askGeminiVision({ data: 'x', mimeType: 'image/png' }, 'test')
+      ).rejects.toThrow(/API key|unavailable/i);
+    });
   });
 });

@@ -137,7 +137,6 @@ async function askGemini(userMessage, eventContext = eventData) {
     }
   }
   rethrow(lastErr);
-  return ''; // unreachable
 }
 
 /**
@@ -244,7 +243,6 @@ async function askGeminiVision(image, userText = '', eventContext = eventData) {
     }
   }
   rethrow(lastErr);
-  return '';
 }
 
 module.exports = {

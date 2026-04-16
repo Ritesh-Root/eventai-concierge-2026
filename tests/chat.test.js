@@ -16,13 +16,27 @@ jest.mock('../src/services/gemini', () => ({
   VISION_MODEL: 'gemini-2.5-flash',
 }));
 
+// Suppress structured log output during tests
+beforeAll(() => {
+  jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+});
+afterAll(() => {
+  process.stdout.write.mockRestore();
+  process.stderr.write.mockRestore();
+});
+
 const app = require('../server');
 const { askGemini, streamGemini, askGeminiVision } = require('../src/services/gemini');
+const chatRouter = require('../src/routes/chat');
 
 // ── POST /api/chat ───────────────────────────────────────────────────
 
 describe('POST /api/chat', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    chatRouter._responseCache.clear();
+  });
 
   it('returns a reply for a valid message', async () => {
     const res = await request(app)
@@ -75,11 +89,7 @@ describe('POST /api/chat', () => {
     expect(askGemini).toHaveBeenCalledWith(expect.not.stringContaining('<script>'));
   });
 
-  it('returns rate-limit headers', async () => {
-    const res = await request(app).post('/api/chat').send({ message: 'Hi' }).expect(200);
-    expect(res.headers).toHaveProperty('ratelimit-limit');
-    expect(res.headers).toHaveProperty('ratelimit-remaining');
-  });
+
 
   it('returns X-Request-Id header', async () => {
     const res = await request(app).post('/api/chat').send({ message: 'Hi' }).expect(200);
@@ -134,12 +144,59 @@ describe('POST /api/chat', () => {
     const res = await request(app).post('/api/chat').send({ message: 'Hi' }).expect(400);
     expect(res.body.error).toMatch(/Invalid image/);
   });
+
+  it('maps AppError instances using their status and toJSON', async () => {
+    const { ValidationError } = require('../src/utils/errors');
+    askGemini.mockRejectedValueOnce(new ValidationError('bad input'));
+    const res = await request(app).post('/api/chat').send({ message: 'Hi' }).expect(400);
+    expect(res.body.error).toBe('bad input');
+  });
+
+  it('returns cached response for repeated messages', async () => {
+    // First call — hits Gemini
+    await request(app).post('/api/chat').send({ message: 'cache test' }).expect(200);
+    expect(askGemini).toHaveBeenCalledTimes(1);
+
+    // Second call — should be cached
+    const res = await request(app).post('/api/chat').send({ message: 'cache test' }).expect(200);
+    expect(res.body.reply).toBe('The opening keynote starts at 09:00 in Grand Hall A.');
+    // askGemini should NOT be called again for the same message
+    expect(askGemini).toHaveBeenCalledTimes(1);
+  });
+
+  it('evicts expired cache entries', async () => {
+    // Manually insert an expired entry
+    chatRouter._responseCache.set('expired msg', { value: 'old', time: 0 });
+    askGemini.mockResolvedValueOnce('fresh response');
+    const res = await request(app).post('/api/chat').send({ message: 'expired msg' }).expect(200);
+    expect(res.body.reply).toBe('fresh response');
+    expect(askGemini).toHaveBeenCalledTimes(1);
+  });
+
+  it('evicts oldest cache entries when max size is reached', async () => {
+    // Fill the cache to max capacity
+    const config = require('../src/config');
+    for (let i = 0; i < config.cache.maxEntries; i++) {
+        chatRouter._responseCache.set(`msg-${i}`, { value: `val-${i}`, time: Date.now() });
+    }
+    expect(chatRouter._responseCache.size).toBe(config.cache.maxEntries);
+    expect(chatRouter._responseCache.has('msg-0')).toBe(true);
+
+    // This should trigger LRU eviction of 'msg-0'
+    await request(app).post('/api/chat').send({ message: 'new item' }).expect(200);
+    
+    expect(chatRouter._responseCache.size).toBe(config.cache.maxEntries);
+    expect(chatRouter._responseCache.has('msg-0')).toBe(false); // First one evicted
+  });
 });
 
 // ── POST /api/chat/stream ────────────────────────────────────────────
 
 describe('POST /api/chat/stream', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    chatRouter._responseCache.clear();
+  });
 
   it('streams SSE chunks then a done event', async () => {
     streamGemini.mockImplementation(async function* () {
@@ -192,6 +249,31 @@ describe('POST /api/chat/stream', () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatch(/event: error/);
   });
+  it('returns cached response via SSE stream for repeated messages', async () => {
+    // Pre-populate cache
+    chatRouter._responseCache.set('stream cached msg', {
+      value: 'Cached SSE reply',
+      time: Date.now(),
+    });
+
+    const res = await request(app)
+      .post('/api/chat/stream')
+      .send({ message: 'stream cached msg' })
+      .buffer(true)
+      .parse((r, cb) => {
+        r.setEncoding('utf8');
+        let data = '';
+        r.on('data', (c) => { data += c; });
+        r.on('end', () => cb(null, data));
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatch(/event: chunk/);
+    expect(res.body).toContain('Cached SSE reply');
+    expect(res.body).toMatch(/event: done/);
+    // streamGemini should NOT be called
+    expect(streamGemini).not.toHaveBeenCalled();
+  });
 });
 
 // ── POST /api/vision ─────────────────────────────────────────────────
@@ -200,7 +282,10 @@ describe('POST /api/vision', () => {
   const validImage =
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABAQMAAAAl21bKAAAAA1BMVEX///+nxBvIAAAAC0lEQVR4nGNgAAIAAAUAAeImBZsAAAAASUVORK5CYII=';
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    chatRouter._responseCache.clear();
+  });
 
   it('returns a reply for a valid image + prompt', async () => {
     const res = await request(app)

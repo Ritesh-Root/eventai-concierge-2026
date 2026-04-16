@@ -90,11 +90,6 @@ function writeLogEntry(entry) {
  */
 function requestLogger() {
   return (req, res, next) => {
-    // Skip logging in test to keep Jest output clean
-    if (process.env.NODE_ENV === 'test') {
-      return next();
-    }
-
     const start = Date.now();
 
     res.on('finish', () => {

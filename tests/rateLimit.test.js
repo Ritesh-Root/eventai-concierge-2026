@@ -7,19 +7,32 @@
 const { createChatLimiter } = require('../src/middleware/rateLimit');
 
 describe('Rate Limiter', () => {
-  it('should export createChatLimiter as a function', () => {
-    expect(typeof createChatLimiter).toBe('function');
+  let originalIsTest;
+  let config;
+  
+  beforeAll(() => {
+    config = require('../src/config');
+    originalIsTest = config.isTest;
   });
 
-  it('should return a middleware function', () => {
+  afterAll(() => {
+    // Cannot reassign config if it's frozen, but we rely on jest.resetModules if needed.
+    // Given config is frozen, let's mock it using jest.mock
+  });
+
+  // Re-requiring cleanly with mock
+  it('should export createChatLimiter as a middleware', () => {
+    jest.mock('../src/config', () => ({
+      ...jest.requireActual('../src/config'),
+      isTest: false, // Force real limiter
+    }));
+    
+    // Clear the require cache for rateLimit
+    jest.resetModules();
+    const { createChatLimiter } = require('../src/middleware/rateLimit');
+    
     const limiter = createChatLimiter();
-    // express-rate-limit returns a middleware function
     expect(typeof limiter).toBe('function');
-  });
-
-  it('should have the expected arity (req, res, next)', () => {
-    const limiter = createChatLimiter();
-    // Middleware functions typically have arity 3
     expect(limiter.length).toBeGreaterThanOrEqual(2);
   });
 });

@@ -47,9 +47,6 @@ const responseCache = new Map();
  * @returns {string|null} Cached reply or null.
  */
 function getCached(key) {
-  if (config.isTest) {
-    return null;
-  }
   const item = responseCache.get(key);
   if (item && Date.now() - item.time < config.cache.ttlMs) {
     logger.debug('Cache HIT', { key: key.slice(0, 40) });
@@ -67,9 +64,6 @@ function getCached(key) {
  * @param {string} value AI response text.
  */
 function setCache(key, value) {
-  if (config.isTest) {
-    return;
-  }
   // LRU eviction: delete oldest entry when at capacity.
   if (responseCache.size >= config.cache.maxEntries) {
     const oldest = responseCache.keys().next().value;
@@ -227,5 +221,8 @@ router.post('/vision', chatLimiter, validateVisionInput, async (req, res) => {
 router.get('/event', (_req, res) => {
   res.json(eventData);
 });
+
+// Expose cache for test cleanup
+router._responseCache = responseCache;
 
 module.exports = router;
